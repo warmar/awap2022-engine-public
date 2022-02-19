@@ -49,6 +49,9 @@ class MyPlayer(Player):
 
         self.warwick_generators = None # our team's generators (i, j) form
         self.ups = None # uncovered populations
+        self.last_ups_size = 0
+        self.warwick_target = None
+        self.min_cost_path = None
 
         self.target = None
         self.target_idx = 0
@@ -236,7 +239,8 @@ class MyPlayer(Player):
         best_cost = None
         for other in self.coverage_positions(map, pos):
             cost = map[other[0]][other[1]].passability
-            if best_cost is None or cost < best_cost:
+            if map[other[0]][other[1]].structure is None and \
+                (best_cost is None or cost < best_cost):
                 best_cost = cost
                 best_pos = other
         return best_pos, best_cost
@@ -257,6 +261,28 @@ class MyPlayer(Player):
                     continue
                 generators.append((i, j))
         return generators
+    
+    def choose_new_target(self, map, team):
+        # find minimum cost path to a tile which covers a population
+        selected_ups = self.ups
+        random.shuffle(selected_ups)
+        number_to_randomly_select = int(25/len(self.generators))
+        self.min_cost_path = None
+        min_cost = None
+        for up in selected_ups[:number_to_randomly_select]:
+            best_pos, best_cost = self.best_tower_location_for_up(map, team, up)
+            for generator in self.warwick_generators:
+                res = self.find_lowest_cost_road(map, team, generator, best_pos)
+                if res is None:
+                    continue
+                path, cost = res
+                cost += TOWER_COST*best_cost
+                if min_cost is None or cost < min_cost:
+                    min_cost = cost
+                    self.min_cost_path = path
+
+        # print('duration', time.perf_counter() - start_time)
+        return self.min_cost_path
 
     def play_turn(self, turn_num, map, player_info):
         start_time = time.perf_counter()
@@ -273,36 +299,17 @@ class MyPlayer(Player):
         else:
             self.ups = [up for up in self.ups if not self.pos_is_covered(map, team, up)]
 
-        # find minimum cost path to a tile which covers a population
-        selected_ups = self.ups
-        random.shuffle(selected_ups)
-        number_to_randomly_select = int(25/len(self.generators))
-        min_cost_path = None
-        min_cost = None
-        for up in selected_ups[:number_to_randomly_select]:
-            best_pos, best_cost = self.best_tower_location_for_up(map, team, up)
-            for generator in self.warwick_generators:
-                res = self.find_lowest_cost_road(map, team, generator, best_pos)
-                if res is None:
-                    continue
-                path, cost = res
-                cost += TOWER_COST*best_cost
-                if min_cost is None or cost < min_cost:
-                    min_cost = cost
-                    min_cost_path = path
+        if len(self.ups) != self.last_ups_size:
+            self.choose_new_target(map, team)
 
-        # print('duration', time.perf_counter() - start_time)
-
-        if min_cost_path is None:
+        if self.min_cost_path is None:
             return
-
         # Only build if we have enough money to build the entire road + tower
         # if player_info.money < min_cost:
         #     return
-
-        end = min_cost_path[0]
-        start = min_cost_path[-1]
-        for intermediate in reversed(min_cost_path[1:-1]):
+        end = self.min_cost_path[0]
+        start = self.min_cost_path[-1]
+        for intermediate in reversed(self.min_cost_path[1:-1]):
             self.build(StructureType.ROAD, intermediate[0], intermediate[1])
         self.build(StructureType.TOWER, end[0], end[1])
 
