@@ -46,6 +46,7 @@ class MyPlayer(Player):
         self.generators = []
 
         self.target = None
+        self.target_idx = 0
         self.last_target_dist = 9e9
         self.target_dist_turn_decreased = 0
         self.TARGET_GIVE_UP = 10
@@ -150,35 +151,37 @@ class MyPlayer(Player):
                 for tile in self.population_tiles:
                     tile.update_closest_tile(tile)
                 if st.type == StructureType.TOWER and \
-                    self.target is not None and \
-                    self.target.dist_to(tile) <= 2:
+                    self.target is not None:
+                    self.population_tiles[self.target_idx].reached = True
                     self.target = None
 
     def load_next_target(self, turn_num, map, player_info):
-        if self.target is not None and self.target_dist_turn_decreased + self.TARGET_GIVE_UP > turn_num:
-            self.target.reached = True
-            self.target = None
+        # if self.target is not None and self.target_dist_turn_decreased + self.TARGET_GIVE_UP > turn_num:
+        #     self.target.reached = True
+        #     self.target = None
         if self.target is not None:
             return
 
-        dists = np.array(tile.dist + (9e9 if tile.reached else 0) for tile in self.population_tiles)
-        i = np.argmin(dists)
-        self.target = self.population_tiles[i]
+        dists = np.array([tile.dist + (9e9 if tile.reached else 0) for tile in self.population_tiles])
+        self.target_idx = np.argmin(dists)
+        self.target = self.population_tiles[self.target_idx]
 
-    def play_turn(self, turn_num, map, player_info):
-        self.init_turn(turn_num, map, player_info)
-
+    def build_towards_target(self, map, player_info):
         start = (self.target.closest_tile.x, self.target.closest_tile.y)
         target = (self.target.x, self.target.y)
         path, cost = self.find_lowest_cost_road(map, player_info.team, start, target)
 
         cost += 250
         if player_info.money >= cost:
+            self.set_bid(2)
             end = path[0]
             start = path[-1]
             for intermediate in reversed(path[1:-1]):
                 self.build(StructureType.ROAD, intermediate[0], intermediate[1])
+                self.prev_builds.append((StructureType.ROAD, intermediate[0], intermediate[1]))
             self.build(StructureType.TOWER, end[0], end[1])
+            self.prev_builds.append((StructureType.TOWER, end[0], end[1]))
 
-
-        return
+    def play_turn(self, turn_num, map, player_info):
+        self.init_turn(turn_num, map, player_info)
+        self.build_towards_target(map, player_info)
