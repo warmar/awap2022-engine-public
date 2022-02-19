@@ -2,6 +2,7 @@ import math
 import heapq
 import numpy as np
 import random
+import math
 
 from src.game import *
 from src.player import *
@@ -287,7 +288,7 @@ class MyPlayer(Player):
                     utilities[i][j] = 0
 
         potentials = []
-        number_of_dijkstra_runs = 25 // len(self.generators)
+        number_of_dijkstra_runs = math.ceil(10 / len(self.generators))
         for _ in range(number_of_dijkstra_runs):
             am = np.argmax(utilities)
             pos = (am // len(map[0]), am % len(map[0]))
@@ -296,6 +297,10 @@ class MyPlayer(Player):
             potentials.append(pos)
             for other in self.coverage_positions(map, pos):
                 utilities[other[0]][other[1]] = 0
+
+        next_time = time.perf_counter()
+        print('utility', next_time - start_time)
+        start_time = next_time
 
         # find minimum cost path to a tile which covers a population
         min_cost_path = None
@@ -312,7 +317,9 @@ class MyPlayer(Player):
                     min_cost = cost
                     min_cost_path = path
 
-        # print('duration', time.perf_counter() - start_time)
+        next_time = time.perf_counter()
+        print('dijkstra', next_time - start_time)
+        start_time = next_time
 
         if min_cost_path is None:
             return
