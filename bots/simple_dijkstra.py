@@ -45,6 +45,8 @@ class MyPlayer(Player):
         self.population_tiles = []
         self.team = None
         self.generators = []
+
+        self.warwick_generators = None # our team's generators (i, j) form
         self.ups = None # uncovered populations
 
         self.target = None
@@ -200,6 +202,8 @@ class MyPlayer(Player):
 
         return False
 
+    # Find all currently uncovered populations
+    # NOTE: EXPENSIVE!
     def uncovered_populations(self, map, team):
         result = []
         for i in range(0, len(map)):
@@ -234,11 +238,9 @@ class MyPlayer(Player):
                 best_pos = other
         return best_pos, best_cost
 
-    def play_turn(self, turn_num, map, player_info):
-        self.init_turn(turn_num, map, player_info)
-
-        team = player_info.team
-        
+    # Finds all of our team's generators on the map
+    # NOTE: EXPENSIVE!
+    def find_all_generators(self, map, team):
         generators = []
         for i in range(0, len(map)):
             for j in range(0, len(map[0])):
@@ -251,6 +253,15 @@ class MyPlayer(Player):
                 if struct.team != team:
                     continue
                 generators.append((i, j))
+        return generators
+
+    def play_turn(self, turn_num, map, player_info):
+        self.init_turn(turn_num, map, player_info)
+
+        team = player_info.team
+
+        if self.warwick_generators is None:
+            self.warwick_generators = self.find_all_generators(map, team)
 
         if self.ups is None:
             self.ups = self.uncovered_populations(map, team)
@@ -262,7 +273,7 @@ class MyPlayer(Player):
         min_cost = None
         for up in self.ups:
             best_pos, best_cost = self.best_tower_location_for_up(map, team, up)
-            for generator in generators:
+            for generator in self.warwick_generators:
                 res = self.find_lowest_cost_road(map, team, generator, best_pos)
                 if res is None:
                     continue
@@ -275,8 +286,9 @@ class MyPlayer(Player):
         if min_cost_path is None:
             return
 
-        if player_info.money < min_cost:
-            return
+        # Only build if we have enough money to build the entire road + tower
+        # if player_info.money < min_cost:
+        #     return
 
         end = min_cost_path[0]
         start = min_cost_path[-1]
