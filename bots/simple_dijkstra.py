@@ -1,6 +1,7 @@
 import math
 import heapq
 import numpy as np
+import random
 
 from src.game import *
 from src.player import *
@@ -186,6 +187,7 @@ class MyPlayer(Player):
             self.build(StructureType.TOWER, end[0], end[1])
             self.prev_builds.append((StructureType.TOWER, end[0], end[1]))
 
+    # Return whether or not a given pos is currently covered by a tower
     def pos_is_covered(self, map, team, pos):
         for other in self.coverage_positions(map, pos):
             struct = map[other[0]][other[1]].structure
@@ -216,6 +218,7 @@ class MyPlayer(Player):
                 result.append((i,j))
         return result
 
+    # Return a list of positions which would cover the input pos
     def coverage_positions(self, map, pos):
         result = []
         for offset_i in range(-2,3):
@@ -256,6 +259,8 @@ class MyPlayer(Player):
         return generators
 
     def play_turn(self, turn_num, map, player_info):
+        start_time = time.perf_counter()
+
         self.init_turn(turn_num, map, player_info)
 
         team = player_info.team
@@ -269,9 +274,12 @@ class MyPlayer(Player):
             self.ups = [up for up in self.ups if not self.pos_is_covered(map, team, up)]
 
         # find minimum cost path to a tile which covers a population
+        selected_ups = self.ups
+        random.shuffle(selected_ups)
+        number_to_randomly_select = int(25/len(self.generators))
         min_cost_path = None
         min_cost = None
-        for up in self.ups:
+        for up in selected_ups[:number_to_randomly_select]:
             best_pos, best_cost = self.best_tower_location_for_up(map, team, up)
             for generator in self.warwick_generators:
                 res = self.find_lowest_cost_road(map, team, generator, best_pos)
@@ -282,6 +290,8 @@ class MyPlayer(Player):
                 if min_cost is None or cost < min_cost:
                     min_cost = cost
                     min_cost_path = path
+
+        # print('duration', time.perf_counter() - start_time)
 
         if min_cost_path is None:
             return
