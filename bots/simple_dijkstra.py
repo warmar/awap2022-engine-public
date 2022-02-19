@@ -273,20 +273,39 @@ class MyPlayer(Player):
         else:
             self.ups = [up for up in self.ups if not self.pos_is_covered(map, team, up)]
 
+        utilities = np.zeros((len(map), len(map[0])))
+        for up in self.ups:
+            pop = map[up[0]][up[1]].population
+            for other in self.coverage_positions(map, up):
+                utilities[other[0]][other[1]] += pop
+
+        for i in range(len(map)):
+            for j in range(len(map[0])):
+                if map[i][j].structure is not None:
+                    utilities[i][j] = 0
+
+        potentials = []
+        number_of_dijkstra_runs = 25 // len(self.generators)
+        for _ in range(number_of_dijkstra_runs):
+            am = np.argmax(utilities)
+            pos = (am // len(map[0]), am % len(map[0]))
+            if utilities[pos[0]][pos[1]] <= 0:
+                break
+            potentials.append(pos)
+            for other in self.coverage_positions(map, pos):
+                utilities[other[0]][other[1]] = 0
+
         # find minimum cost path to a tile which covers a population
-        selected_ups = self.ups
-        random.shuffle(selected_ups)
-        number_to_randomly_select = int(25/len(self.generators))
         min_cost_path = None
         min_cost = None
-        for up in selected_ups[:number_to_randomly_select]:
-            best_pos, best_cost = self.best_tower_location_for_up(map, team, up)
+        for pos in potentials:
+            passability = map[pos[0]][pos[1]].passability
             for generator in self.warwick_generators:
-                res = self.find_lowest_cost_road(map, team, generator, best_pos)
+                res = self.find_lowest_cost_road(map, team, generator, pos)
                 if res is None:
                     continue
                 path, cost = res
-                cost += TOWER_COST*best_cost
+                cost += TOWER_COST*passability
                 if min_cost is None or cost < min_cost:
                     min_cost = cost
                     min_cost_path = path
