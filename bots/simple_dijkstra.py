@@ -57,6 +57,9 @@ class MyPlayer(Player):
         self.last_target_dist = 9e9
         self.target_dist_turn_decreased = 0
         self.TARGET_GIVE_UP = 10
+
+        self.previous_computation_time = None # to adjust number of dijkstra runs
+        self.number_of_dijkstra_runs = 3
         return
 
     def is_valid_pos(self, map, pos):
@@ -287,9 +290,21 @@ class MyPlayer(Player):
                 if map[i][j].structure is not None:
                     utilities[i][j] = 0
 
+        if self.previous_computation_time is not None:
+            if self.previous_computation_time < 0.3:
+                self.number_of_dijkstra_runs += 1
+            if self.previous_computation_time > 0.3:
+                self.number_of_dijkstra_runs -= 1
+
+            if self.previous_computation_time > 1:
+                self.number_of_dijkstra_runs = 3
+
+            if self.previous_computation_time > 2:
+                self.number_of_dijkstra_runs = 1
+
         potentials = []
-        number_of_dijkstra_runs = math.ceil(10 / len(self.generators))
-        for _ in range(number_of_dijkstra_runs):
+        number_of_potentials = math.ceil(self.number_of_dijkstra_runs / len(self.generators))
+        for _ in range(number_of_potentials):
             am = np.argmax(utilities)
             pos = (am // len(map[0]), am % len(map[0]))
             if utilities[pos[0]][pos[1]] <= 0:
@@ -318,7 +333,9 @@ class MyPlayer(Player):
                     min_cost_path = path
 
         next_time = time.perf_counter()
-        print('dijkstra', next_time - start_time)
+        dijkstra_duration = next_time - start_time
+        print('dijkstra_duration', dijkstra_duration)
+        self.previous_computation_time = dijkstra_duration
         start_time = next_time
 
         if min_cost_path is None:
