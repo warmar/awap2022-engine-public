@@ -17,7 +17,7 @@ class AugmentedTile(Tile):
         self.reached = False
 
     def update_closest_tile(self, tile):
-        dist = math.hypot(tile.x - tile.x, tile.y - tile.y)
+        dist = math.hypot(tile.x - self.closest_tile.x, tile.y - self.closest_tile.y)
         if dist < self.dist:
             self.closest_tile = tile
 
