@@ -1,13 +1,13 @@
-import sys
-
-import random
 import math
+import heapq
 import numpy as np
 
 from src.game import *
 from src.player import *
 from src.structure import *
 from src.game_constants import GameConstants as GC
+
+ROAD_COST = 10
 
 class AugmentedTile(Tile):
     def __init__(self, tile, closest_tile):
@@ -17,7 +17,7 @@ class AugmentedTile(Tile):
         self.reached = False
 
     def update_closest_tile(self, tile):
-        dist = math.hypot(tile.x - tile.x, tile.y - tile.y)
+        dist = math.hypot(tile.x - self.closest_tile.x, tile.y - self.closest_tile.y)
         if dist < self.dist:
             self.closest_tile = tile
 
@@ -50,6 +50,65 @@ class MyPlayer(Player):
         self.target_dist_turn_decreased = 0
         self.TARGET_GIVE_UP = 10
         return
+
+    def is_valid_pos(self, map, pos):
+        if pos[0] < 0:
+            return False
+        if pos[1] < 0:
+            return False
+        if pos[0] >= len(map):
+            return False
+        if pos[1] >= len(map[0]):
+            return False
+        return True
+
+    def neighbors(self, map, pos):
+        x, y = pos
+        result = [neigh for neigh in [(x-1, y), (x+1, y), (x, y-1), (x, y+1)] if self.is_valid_pos(map, neigh)]
+        return result
+
+    def find_lowest_cost_road(self, map, team, start, end):
+        self.MAP_WIDTH = len(map)
+        self.MAP_HEIGHT = len(map[0])
+        distances = np.full((self.MAP_WIDTH, self.MAP_HEIGHT), np.Inf)
+        previous = np.full((self.MAP_WIDTH, self.MAP_HEIGHT), None)
+
+        distances[start[0]][start[1]] = 0
+
+        q = []
+        heapq.heappush(q, (0, start))
+        while len(q) > 0:
+            curr = heapq.heappop(q)
+
+            curr_distance = curr[0]
+            curr_pos = curr[1]
+            # Termination Case
+            
+            if curr_pos == end:
+                # Compute path
+                path = [curr_pos]
+                while True:
+                    if path[-1] == start:
+                        return path, distances[curr_pos[0]][curr_pos[1]]
+                    path.append(previous[path[-1][0]][path[-1][1]])
+
+            for neigh in self.neighbors(map, curr_pos):
+                # todo check if existing structure is there
+                cost = ROAD_COST * map[neigh[0]][neigh[1]].passability
+                struct = map[neigh[0]][neigh[1]].structure
+                if struct is not None:
+                    if struct.team == team:
+                        cost = 0
+                    else:
+                        cost = np.Inf
+
+                alt = curr_distance + cost
+                if alt < distances[neigh[0]][neigh[1]]:
+                    previous[neigh[0]][neigh[1]] = curr_pos
+                    distances[neigh[0]][neigh[1]] = alt
+                    heapq.heappush(q, (alt, neigh))
+    
+        return None
     
     def get_closest_tile(self, x, y, tiles):
         dists = np.array([math.hypot(x - tile.x, y - tile.y) for tile in tiles])
@@ -108,4 +167,18 @@ class MyPlayer(Player):
 
     def play_turn(self, turn_num, map, player_info):
         self.init_turn(turn_num, map, player_info)
+
+        start = (self.target.closest_tile.x, self.target.closest_tile.y)
+        target = (self.target.x, self.target.y)
+        path, cost = self.find_lowest_cost_road(map, player_info.team, start, target)
+
+        cost += 250
+        if player_info.money >= cost:
+            end = path[0]
+            start = path[-1]
+            for intermediate in reversed(path[1:-1]):
+                self.build(StructureType.ROAD, intermediate[0], intermediate[1])
+            self.build(StructureType.TOWER, end[0], end[1])
+
+
         return
