@@ -291,9 +291,9 @@ class MyPlayer(Player):
                     utilities[i][j] = 0
 
         if self.previous_computation_time is not None:
-            if self.previous_computation_time < 0.3:
+            if self.previous_computation_time < 0.25:
                 self.number_of_dijkstra_runs += 1
-            if self.previous_computation_time > 0.3:
+            if self.previous_computation_time > 0.25:
                 self.number_of_dijkstra_runs -= 1
 
             if self.previous_computation_time > 1:
@@ -307,9 +307,10 @@ class MyPlayer(Player):
         for _ in range(number_of_potentials):
             am = np.argmax(utilities)
             pos = (am // len(map[0]), am % len(map[0]))
-            if utilities[pos[0]][pos[1]] <= 0:
+            utility = utilities[pos[0]][pos[1]]
+            if utility <= 0:
                 break
-            potentials.append(pos)
+            potentials.append((pos, utility))
             for other in self.coverage_positions(map, pos):
                 utilities[other[0]][other[1]] = 0
 
@@ -319,8 +320,8 @@ class MyPlayer(Player):
 
         # find minimum cost path to a tile which covers a population
         min_cost_path = None
-        min_cost = None
-        for pos in potentials:
+        best_util_over_cost = None
+        for pos, utility in potentials:
             passability = map[pos[0]][pos[1]].passability
             for generator in self.warwick_generators:
                 res = self.find_lowest_cost_road(map, team, generator, pos)
@@ -328,8 +329,9 @@ class MyPlayer(Player):
                     continue
                 path, cost = res
                 cost += TOWER_COST*passability
-                if min_cost is None or cost < min_cost:
-                    min_cost = cost
+                util_over_cost = utility / cost
+                if best_util_over_cost is None or util_over_cost > best_util_over_cost:
+                    best_util_over_cost = util_over_cost
                     min_cost_path = path
 
         next_time = time.perf_counter()
