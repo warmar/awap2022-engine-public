@@ -8,6 +8,7 @@ from src.structure import *
 from src.game_constants import GameConstants as GC
 
 ROAD_COST = 10
+TOWER_COST = 250
 
 class AugmentedTile(Tile):
     def __init__(self, tile, closest_tile):
@@ -44,6 +45,7 @@ class MyPlayer(Player):
         self.population_tiles = []
         self.team = None
         self.generators = []
+        self.ups = None # uncovered populations
 
         self.target = None
         self.target_idx = 0
@@ -182,6 +184,104 @@ class MyPlayer(Player):
             self.build(StructureType.TOWER, end[0], end[1])
             self.prev_builds.append((StructureType.TOWER, end[0], end[1]))
 
+    def pos_is_covered(self, map, team, pos):
+        for other in self.coverage_positions(map, pos):
+            struct = map[other[0]][other[1]].structure
+            if struct is None:
+                continue
+
+            if struct.type != StructureType.TOWER:
+                continue
+
+            if struct.team != team:
+                continue
+
+            return True
+
+        return False
+
+    def uncovered_populations(self, map, team):
+        result = []
+        for i in range(0, len(map)):
+            for j in range(0, len(map[0])):
+                tile = map[i][j]
+                if tile.population == 0:
+                    continue
+                if self.pos_is_covered(map, team, (i,j)):
+                    continue
+                result.append((i,j))
+        return result
+
+    def coverage_positions(self, map, pos):
+        result = []
+        for offset_i in range(-2,3):
+            for offset_j in range(-2,3):
+                other = (pos[0] + offset_i, pos[1] + offset_j)
+                if not self.is_valid_pos(map, other):
+                    continue
+                if abs(offset_i) + abs(offset_j) > 2:
+                    continue
+                result.append(other)
+        return result
+
+    def best_tower_location_for_up(self, map, team, pos):
+        best_pos = None
+        best_cost = None
+        for other in self.coverage_positions(map, pos):
+            cost = map[other[0]][other[1]].passability
+            if best_cost is None or cost < best_cost:
+                best_cost = cost
+                best_pos = other
+        return best_pos, best_cost
+
     def play_turn(self, turn_num, map, player_info):
         self.init_turn(turn_num, map, player_info)
-        self.build_towards_target(map, player_info)
+
+        team = player_info.team
+        
+        generators = []
+        for i in range(0, len(map)):
+            for j in range(0, len(map[0])):
+                tile = map[i][j]
+                struct = tile.structure
+                if struct is None:
+                    continue
+                if struct.type != StructureType.GENERATOR:
+                    continue
+                if struct.team != team:
+                    continue
+                generators.append((i, j))
+
+        if self.ups is None:
+            self.ups = self.uncovered_populations(map, team)
+        else:
+            self.ups = [up for up in self.ups if not self.pos_is_covered(map, team, up)]
+
+        # find minimum cost path to a tile which covers a population
+        min_cost_path = None
+        min_cost = None
+        for up in self.ups:
+            best_pos, best_cost = self.best_tower_location_for_up(map, team, up)
+            for generator in generators:
+                res = self.find_lowest_cost_road(map, team, generator, best_pos)
+                if res is None:
+                    continue
+                path, cost = res
+                cost += TOWER_COST*best_cost
+                if min_cost is None or cost < min_cost:
+                    min_cost = cost
+                    min_cost_path = path
+
+        if min_cost_path is None:
+            return
+
+        if player_info.money < min_cost:
+            return
+
+        end = min_cost_path[0]
+        start = min_cost_path[-1]
+        for intermediate in reversed(min_cost_path[1:-1]):
+            self.build(StructureType.ROAD, intermediate[0], intermediate[1])
+        self.build(StructureType.TOWER, end[0], end[1])
+
+        return
