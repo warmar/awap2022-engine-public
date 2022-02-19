@@ -222,7 +222,7 @@ class MyPlayer(Player):
 
         team = player_info.team
         
-        generator = None
+        generators = []
         for i in range(0, len(map)):
             for j in range(0, len(map[0])):
                 tile = map[i][j]
@@ -233,8 +233,7 @@ class MyPlayer(Player):
                     continue
                 if struct.team != team:
                     continue
-                generator = (i, j)
-                break
+                generators.append((i, j))
 
         if self.ups is None:
             self.ups = self.uncovered_populations(map, team)
@@ -246,14 +245,15 @@ class MyPlayer(Player):
         min_cost = None
         for up in self.ups:
             best_pos, best_cost = self.best_tower_location_for_up(map, team, up)
-            res = self.find_lowest_cost_road(map, team, generator, best_pos)
-            if res is None:
-                continue
-            path, cost = res
-            cost += TOWER_COST*best_cost
-            if min_cost is None or cost < min_cost:
-                min_cost = cost
-                min_cost_path = path
+            for generator in generators:
+                res = self.find_lowest_cost_road(map, team, generator, best_pos)
+                if res is None:
+                    continue
+                path, cost = res
+                cost += TOWER_COST*best_cost
+                if min_cost is None or cost < min_cost:
+                    min_cost = cost
+                    min_cost_path = path
 
         if min_cost_path is None:
             return
